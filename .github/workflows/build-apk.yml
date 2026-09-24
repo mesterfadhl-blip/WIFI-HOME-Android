@@ -15,6 +15,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Restore WIFI-HOME application
+        run: |
+          cat app/src/main/assets/.parts/* > /tmp/wifihome.b64
+          base64 -d /tmp/wifihome.b64 > /tmp/wifihome.html.gz
+          gzip -dc /tmp/wifihome.html.gz > app/src/main/assets/index.html
+          test -s app/src/main/assets/index.html
+          grep -q "WIFI-HOME" app/src/main/assets/index.html
+          echo "Application payload restored: $(wc -c < app/src/main/assets/index.html) bytes"
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,8 +34,11 @@ jobs:
           gradle-version: '8.9'
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
-      - name: Prepare install file
-        run: cp app/build/outputs/apk/debug/app-debug.apk WIFI-HOME.apk
+      - name: Verify APK
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk WIFI-HOME.apk
+          ls -lh WIFI-HOME.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
