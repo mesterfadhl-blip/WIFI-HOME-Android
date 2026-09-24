@@ -17,12 +17,16 @@ jobs:
         uses: actions/checkout@v4
       - name: Restore WIFI-HOME application
         run: |
-          cat app/src/main/assets/.parts/00 app/src/main/assets/.parts/01 | tr -d '\r\n ' > /tmp/wifihome.b64
-          python3 -c "import base64; s=open('/tmp/wifihome.b64','rb').read().strip(); s += b'=' * (-len(s) % 4); open('/tmp/wifihome.html.gz','wb').write(base64.b64decode(s, validate=False))"
-          gzip -dc /tmp/wifihome.html.gz > app/src/main/assets/index.html
+          cat app/src/main/assets/.parts/00 app/src/main/assets/.parts/01 > /tmp/wifihome.b64
+          python3 - <<'PY'
+          import base64, gzip, pathlib
+          s=pathlib.Path('/tmp/wifihome.b64').read_text().strip()
+          data=gzip.decompress(base64.b64decode(s))
+          pathlib.Path('app/src/main/assets/index.html').write_bytes(data)
+          print('Application payload restored:', len(data), 'bytes')
+          PY
           test -s app/src/main/assets/index.html
           grep -q "WIFI-HOME" app/src/main/assets/index.html
-          echo "Application payload restored: $(wc -c < app/src/main/assets/index.html) bytes"
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
