@@ -18,7 +18,13 @@ jobs:
       - name: Restore WIFI-HOME application
         run: |
           cat app/src/main/assets/.parts/00 app/src/main/assets/.parts/01 | tr -d '\r\n ' > /tmp/wifihome.b64
-          base64 -d /tmp/wifihome.b64 > /tmp/wifihome.html.gz
+          python3 - <<'PY'
+import base64
+p='/tmp/wifihome.b64'
+s=open(p,'rb').read().strip()
+s += b'=' * (-len(s) % 4)
+open('/tmp/wifihome.html.gz','wb').write(base64.b64decode(s, validate=False))
+PY
           gzip -dc /tmp/wifihome.html.gz > app/src/main/assets/index.html
           test -s app/src/main/assets/index.html
           grep -q "WIFI-HOME" app/src/main/assets/index.html
