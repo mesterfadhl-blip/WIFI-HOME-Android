@@ -2,3 +2,5 @@
 تطبيق WIFI-HOME المالي والمبيعات للأندرويد.
 
 يتم بناء ملف APK تلقائياً عبر GitHub Actions. بعد نجاح Workflow باسم **Build WIFI-HOME APK** ستجد Artifact باسم **WIFI-HOME-APK**.
+
+<!-- build-trigger: 2026-09-24 -->
