@@ -1,0 +1,1 @@
+{"id": "./", "name": "واي فاي هوم", "short_name": "WIFI-HOME", "lang": "ar", "dir": "rtl", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#eef3f8", "theme_color": "#132a46", "icons": [{"src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]}
