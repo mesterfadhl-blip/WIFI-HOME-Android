@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: wifi-home-erp
+    runtime: python
+    branch: codex/erp-server-foundation
+    plan: starter
+    numInstances: 1
+    autoDeployTrigger: off
+    buildCommand: pip install -r erp/requirements.txt
+    startCommand: python -m erp.production
+    healthCheckPath: /healthz
+    disk:
+      name: erp-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ERP_DATABASE
+        value: /var/data/wifi-home/data.sqlite3
+      - key: ERP_COOKIE_SECURE
+        value: "1"
+      - key: ERP_ADMIN_NAME
+        sync: false
+      - key: ERP_ADMIN_PASSWORD
+        sync: false
