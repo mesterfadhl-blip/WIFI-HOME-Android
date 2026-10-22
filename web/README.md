@@ -33,3 +33,7 @@ This is an initial functional ERP workspace, not a complete ERP or a deployment 
 `node --test tests/erp.test.mjs` from repository root covers sales/discounts, inventory, balanced journals, editing, customer reassignment, unrelated receipts, cancellation, insufficient stock and duplicate lines, invalid dates/amounts, closed days, credit limits, period receipts, product allocation, profit and historical cost changes.
 
 Browser validation at 390x844 and 1366x900 covers invoice creation/editing, persisted totals and stock, navigation, and report rendering. This does not establish every business rule or replace review with the owner's real examples.
+
+## Single HTML distribution
+
+`python scripts/build-standalone.py <output/index.html>` embeds CSS and both JavaScript modules into one classic-script HTML document. No neighboring resources are needed. When local storage is blocked by a file provider, the application displays an explicit preview-only warning and uses temporary memory; entries will not survive closing. Use the hosted HTTPS version for real work and persistent browser storage. Direct `content://` execution depends on the Android file provider/browser and has not been verified on a physical phone.
