@@ -60,8 +60,12 @@ def production_app():
 def main():
     from waitress import serve
 
+    app = production_app()
+    from .backup_job import start_scheduler
+
+    start_scheduler(os.environ["ERP_DATABASE"])
     serve(
-        production_app(),
+        app,
         host="0.0.0.0",
         port=int(os.environ.get("PORT", "10000")),
         threads=4,

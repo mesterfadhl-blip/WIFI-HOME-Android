@@ -33,7 +33,9 @@ def audit(c, user, action, document, detail=""):
 
 
 def journal(c, document, day, rows):
-    closed = c.execute("SELECT max(through) FROM periods").fetchone()[0]
+    closed = c.execute("SELECT max(through) FROM periods WHERE reopened=0").fetchone()[
+        0
+    ]
     if closed and day <= closed:
         raise BusinessError("الفترة مقفلة محاسبياً")
     if sum(r[2] - r[3] for r in rows) != 0:

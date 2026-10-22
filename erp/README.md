@@ -80,7 +80,7 @@ The current suite contains 41 server tests. A browser cycle exercised supplier c
 
 ## Remaining modules and deployment
 
-Purchase orders and separate receiving, supplier purchase returns, balance sheet and statutory reporting, controlled period/bank-statement reopening, more granular permissions, multi-currency handling, automated off-site backups and production hosting still need implementation. This is not a completed or independently audited ERP. The static Netlify Drop deployment remains the old application; the Python service and durable database require server hosting.
+Version four adds purchase orders, separate receiving and matched supplier invoicing, supplier returns, an internal financial position, audited period/bank reopening, reviewed legacy customer migration, master-data maintenance, credit limits and configurable S3 backups. See [the Arabic operating guide](OPERATIONS-AR.md). Public hosting and real customer migration still require the owner’s hosting account and actual legacy backup; S3 scheduling needs a private bucket and credentials. Custom user permissions, consolidated/price-variance purchase invoicing and jurisdiction-specific statutory outputs remain outside this release.
 
 The browser scenario is saved as `tests/browser_erp_operations.py`. It requires Playwright/Chromium in the test environment and an **empty dedicated** database server. It refuses to initialize a server that already has users. Set `ERP_TEST_URL` and `ERP_REVIEW_DIR` to select the test endpoint and artifact directory. It is not part of the application's runtime dependencies.
 
@@ -108,3 +108,8 @@ Choose a warehouse on sales and purchase drafts and for opening inventory. Retur
 ## Version 3: browser regression
 
 `tests/browser_erp_workspace.py` requires an empty dedicated test server, Playwright/Chromium and `ERP_TEST_URL`. It creates synthetic users/data and exercises: warehouse creation and transfer; sale from the destination warehouse; bank receipt and invoice allocation; CSV statement import, match and finalization; mobile settlement viewing; and independent A4 invoice, aging, transfer and reconciliation output. Application runtime still uses only the Python standard library. The new public service has not been deployed; the older Netlify static site is unchanged.
+
+
+## Version four
+
+[Operating guide and actual customer migration](OPERATIONS-AR.md). Schema version is now 4; new tables/columns are additive and repeated startup preserves existing balances. Local development still uses Python standard library; production requirements additionally install Waitress and boto3 for optional off-site backups. The standalone mobile preview remains read-only and does not become a transactional server by downloading it.

@@ -10,14 +10,14 @@ from .server import create_app
 
 
 def main():
-    base = Path(os.environ.get('LOCALAPPDATA') or (Path.home() / '.local' / 'share'))
-    database = base / 'WIFI-HOME-ERP' / 'data.sqlite3'
+    base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / ".local" / "share"))
+    database = base / "WIFI-HOME-ERP" / "data.sqlite3"
     database.parent.mkdir(parents=True, exist_ok=True)
-    with make_server('127.0.0.1', 0, create_app(str(database))) as server:
-        address = f'http://127.0.0.1:{server.server_port}/'
-        print(f'WIFI HOME ERP: {address}', flush=True)
-        print(f'Database: {database}', flush=True)
-        print('Keep this window open. Press Ctrl+C to stop.', flush=True)
+    with make_server("127.0.0.1", 0, create_app(str(database))) as server:
+        address = f"http://127.0.0.1:{server.server_port}/"
+        print(f"WIFI HOME ERP: {address}", flush=True)
+        print(f"Database: {database}", flush=True)
+        print("Keep this window open. Press Ctrl+C to stop.", flush=True)
         timer = threading.Timer(1, webbrowser.open, args=(address,))
         timer.daemon = True
         timer.start()
@@ -27,5 +27,5 @@ def main():
             pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

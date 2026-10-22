@@ -33,3 +33,5 @@ These samples use another fresh synthetic database, not the previous cycles. Ope
 - settlements-workspace.png: real browser capture of the allocation/aging workspace.
 
 After the sale, warehouse quantities are 80 and 18 units, total value 3,920.00 YER. These documents demonstrate test output only; the public static website remains unchanged.
+
+Version-four review documents: `financial-position.pdf`, `goods-receipt.pdf`, and `supplier-return.pdf`. All records and balances are synthetic, generated in a separate temporary database by `scripts/check_enterprise_browser.py`; they are not the user's imported customers or live accounts.

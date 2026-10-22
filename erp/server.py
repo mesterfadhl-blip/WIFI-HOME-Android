@@ -85,8 +85,8 @@ def draft_save(c, data, user, id=None):
                 raise ValueError()
         except (ValueError, TypeError, OverflowError):
             raise BusinessError("الكمية يجب أن تكون عدداً صحيحاً أكبر من صفر")
-        if not p:
-            raise BusinessError("الصنف غير موجود")
+        if not p or not p["active"]:
+            raise BusinessError("الصنف غير موجود أو موقوف")
         lines.append(
             (
                 p["id"],
@@ -188,6 +188,22 @@ def post_invoice(c, id, user):
         if prior["status"] != "posted":
             raise BusinessError("تم تعديل أو إلغاء الفاتورة الأصلية مسبقاً")
         reverse(c, prior, user, "إصدار بديل " + s["number"], "superseded")
+    customer = c.execute(
+        "SELECT credit_limit FROM customers WHERE id=?", (s["customer_id"],)
+    ).fetchone()
+    debt = c.execute(
+        "SELECT coalesce(sum(debit-credit),0) FROM journal WHERE account='العملاء' AND customer_id=?",
+        (s["customer_id"],),
+    ).fetchone()[0]
+    added_credit = s["total"] - s["paid"]
+    if (
+        customer["credit_limit"]
+        and added_credit > 0
+        and debt + added_credit > customer["credit_limit"]
+    ):
+        raise BusinessError(
+            "البيع الآجل يتجاوز حد ائتمان العميل؛ راجع التحصيل أو حد الائتمان"
+        )
     cost = 0
     stock_cost = 0
     service_cost = 0
@@ -196,6 +212,8 @@ def post_invoice(c, id, user):
         p = c.execute(
             "SELECT * FROM products WHERE id=?", (line["product_id"],)
         ).fetchone()
+        if not p["active"]:
+            raise BusinessError("الصنف موقوف للبيع؛ راجع دليل الأصناف")
         value = (
             line["qty"] * p["cost"]
             if p["service"]
@@ -284,6 +302,7 @@ class Application:
                 "/document.js",
                 "/operations.js",
                 "/workspace.js",
+                "/enterprise.js",
             ):
                 file = ROOT / "static" / ({"/": "index.html"}.get(path, path[1:]))
                 body = file.read_bytes()
@@ -412,7 +431,11 @@ class Application:
                         c.commit()
                 if isinstance(result, tuple):
                     content, kind, filename = result
-                    body = content.encode("utf-8-sig")
+                    body = (
+                        content
+                        if isinstance(content, bytes)
+                        else content.encode("utf-8-sig")
+                    )
                     headers.append(
                         (
                             "Content-Disposition",

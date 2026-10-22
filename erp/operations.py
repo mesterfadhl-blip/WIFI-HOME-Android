@@ -92,7 +92,9 @@ def quantity(value):
 
 def open_date(c, value):
     day = date(value)
-    closed = c.execute("SELECT max(through) FROM periods").fetchone()[0]
+    closed = c.execute("SELECT max(through) FROM periods WHERE reopened=0").fetchone()[
+        0
+    ]
     if closed and day <= closed:
         raise BusinessError("الفترة مقفلة محاسبياً حتى " + closed)
     return day
@@ -165,6 +167,22 @@ def purchase_save(c, data, uid, id=None):
     total = sum(q * cost for _, _, q, cost in lines)
     if paid > total:
         raise BusinessError("المسدد يتجاوز قيمة الشراء")
+    if old and old.get("receipt_id"):
+        from .procurement import validate_matched
+
+        validate_matched(
+            c,
+            {
+                **old,
+                "supplier_id": data["supplier_id"],
+                "date": day,
+                "warehouse_id": warehouse_id,
+                "lines": [
+                    {"product_id": p, "qty": q, "cost": cost}
+                    for p, name, q, cost in lines
+                ],
+            },
+        )
     values = (data["supplier_id"], day, total, paid, str(data.get("note", ""))[:2000])
     if id:
         c.execute(
@@ -200,7 +218,10 @@ def post_purchase(c, id, uid):
     open_date(c, s["date"])
     if s["status"] != "draft":
         raise BusinessError("المستند ليس مسودة")
-    for l in s["lines"]:
+    from .procurement import validate_matched
+
+    validate_matched(c, s)
+    for l in [] if s.get("receipt_id") else s["lines"]:
         change_stock(
             c,
             l["product_id"],
@@ -210,7 +231,8 @@ def post_purchase(c, id, uid):
             s["date"],
             s["warehouse_id"],
         )
-    rows = [("المخزون", s["total"], 0), ("الموردون", 0, s["total"])]
+    account = "بضاعة مستلمة غير مفوترة" if s.get("receipt_id") else "المخزون"
+    rows = [(account, s["total"], 0), ("الموردون", 0, s["total"])]
     if s["paid"]:
         rows += [("الموردون", s["paid"], 0), ("الصندوق", 0, s["paid"])]
     supplier_journal(c, s["number"], s["date"], s["supplier_id"], rows)
@@ -224,7 +246,7 @@ def cancel_purchase(c, id, uid, reason):
     open_date(c, s["date"])
     if s["status"] != "posted" or not str(reason).strip():
         raise BusinessError("اختر فاتورة مرحلة واكتب سبب الإلغاء")
-    for l in s["lines"]:
+    for l in [] if s.get("receipt_id") else s["lines"]:
         last = c.execute(
             "SELECT document FROM movements WHERE product_id=? AND warehouse_id=? ORDER BY date DESC,id DESC LIMIT 1",
             (l["product_id"], s["warehouse_id"]),
@@ -233,8 +255,12 @@ def cancel_purchase(c, id, uid, reason):
             raise BusinessError(
                 "تحرك الصنف بعد الاستلام؛ إلغاء الشراء يتطلب معالجة الحركات اللاحقة أولاً"
             )
+    if c.execute(
+        "SELECT 1 FROM supplier_returns WHERE purchase_id=? AND status='posted'", (id,)
+    ).fetchone():
+        raise BusinessError("اعكس مرتجعات المورد أولاً قبل إلغاء الشراء")
     ref = s["number"] + "-REV"
-    for l in s["lines"]:
+    for l in [] if s.get("receipt_id") else s["lines"]:
         change_stock(
             c,
             l["product_id"],
@@ -553,7 +579,9 @@ def _handle(c, path, method, data, env, uid, role):
             raise BusinessError("إقفال الفترات للمدير فقط")
         through = date(data.get("through"))
         reason = str(data.get("reason", "")).strip()
-        last = c.execute("SELECT max(through) FROM periods").fetchone()[0]
+        last = c.execute(
+            "SELECT max(through) FROM periods WHERE reopened=0"
+        ).fetchone()[0]
         if not reason or (last and through <= last):
             raise BusinessError("أدخل سبباً وتاريخ إقفال أحدث من السابق")
         c.execute(
@@ -606,6 +634,7 @@ def finance(c, query):
     returns = net("مردودات المبيعات")
     cost = net("تكلفة المبيعات")
     expenses = net("مصروفات التشغيل")
+    purchase_variance = net("فروق تكلفة مردودات المشتريات")
     stock = [
         dict(r)
         for r in c.execute(
@@ -630,7 +659,8 @@ def finance(c, query):
         "cost": cost,
         "gross_profit": sales - returns - cost,
         "expenses": expenses,
-        "net_profit": sales - returns - cost - expenses,
+        "purchase_return_variance": purchase_variance,
+        "net_profit": sales - returns - cost - expenses - purchase_variance,
         "stock": stock,
         "stock_value": sum(r["stock_value"] for r in stock),
         "stock_date": "current",

@@ -3,14 +3,26 @@
 import hashlib
 import json
 from .domain import BusinessError
-from . import settlements, warehouses, treasury
+from . import (
+    settlements,
+    warehouses,
+    treasury,
+    legacy,
+    procurement,
+    administration,
+    directory,
+)
 
 
 def migrate(c):
     settlements.migrate(c)
     warehouses.migrate(c)
     treasury.migrate(c)
-    c.execute("PRAGMA user_version=3")
+    legacy.migrate(c)
+    procurement.migrate(c)
+    administration.migrate(c)
+    directory.migrate(c)
+    c.execute("PRAGMA user_version=4")
 
 
 def handle(c, path, method, data, env, uid, role):
@@ -31,7 +43,15 @@ def handle(c, path, method, data, env, uid, role):
                 raise BusinessError("معرف الطلب مرتبط بمحتوى مختلف")
             return json.loads(old["result"])
     result = None
-    for module in (settlements, warehouses, treasury):
+    for module in (
+        directory,
+        legacy,
+        procurement,
+        administration,
+        settlements,
+        warehouses,
+        treasury,
+    ):
         result = module.handle(c, path, method, data, env, uid, role)
         if result is not None:
             break

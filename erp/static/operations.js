@@ -181,6 +181,7 @@ async function financePage() {
       ["صافي المبيعات بعد المرتجعات", f.net_sales],
       ["مجمل الربح", f.gross_profit],
       ["مصروفات التشغيل", f.expenses],
+      ["فروق تكلفة مردودات الشراء", f.purchase_return_variance || 0],
       ["صافي نتيجة الفترة", f.net_profit],
     ]
       .map(
