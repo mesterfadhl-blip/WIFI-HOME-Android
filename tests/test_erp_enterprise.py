@@ -540,3 +540,26 @@ class EnterpriseTests(unittest.TestCase):
         self.assertEqual(before["suppliers"], after["suppliers"])
         with connect(self.path) as c:
             self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 4)
+
+    def test_legacy_explicit_demo_filter_and_optional_metadata(self):
+        data = self.legacy()
+        people = data["backup"]["data"]["customers"]
+        people[0]["note"] = "ملاحظة نقل اصطناعية"
+        people[0]["created"] = "2025-10-01T09:00:00"
+        db = data["backup"]["data"]
+        db["sales"] = [{"ref": "DEMO-1", "demo": True}]
+        db["journal"][0]["ref"] = "DEMO-1"
+        data["exclude_demo"] = True
+        plan = self.ok("/api/legacy/preview", "POST", data)
+        self.assertEqual(plan["demo_documents"], 1)
+        self.assertEqual(plan["excluded_demo_documents"], 1)
+        # The unmarked receipt remains; demo sales are never silently retained.
+        self.assertEqual(plan["rows"][0]["opening"], -5000)
+        self.ok("/api/legacy/import", "POST", {**data, "token": plan["token"]})
+        customer = next(
+            c for c in self.state()["customers"] if c["name"] == "عميل من النسخة"
+        )
+        self.assertEqual(customer["note"], "ملاحظة نقل اصطناعية")
+        self.assertEqual(customer["legacy_created"], "2025-10-01T09:00:00")
+        self.assertEqual(customer["balance"], -5000)
+        self.balanced()

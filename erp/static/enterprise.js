@@ -122,14 +122,14 @@ function migrationPage() {
     "migration",
     "نقل العملاء من النظام السابق",
     "",
-    `<div class="help">من النظام السابق اختر الإعدادات والبيانات ← تصدير قاعدة البيانات. هنا تُنقل الأسماء والهواتف والمناطق وحدود الائتمان، واختيارياً صافي الأرصدة حتى تاريخ الانتقال كقيود افتتاحية. لا تُنقل الفواتير القديمة؛ لا تبدأ معاملات حقيقية حتى مراجعة الأرصدة. التكرار والتعارض يُفحصان قبل الاعتماد.</div><form id="legacy-form" class="panel padded"><div class="fields"><div><label>النسخة الاحتياطية JSON</label><input name="file" type="file" accept=".json,application/json" required></div>${field("رمز المصدر الثابت", "source", "text", "wifi-home-legacy", "required")}${field("تاريخ رصيد الانتقال شامل اليوم", "date", "date", today(), "required")}<div><label><input name="include_balances" type="checkbox"> نقل الأرصدة من قيود العملاء (بعد المراجعة)</label></div></div><button>قراءة الملف ومعاينة النقل</button></form><div id="legacy-plan"></div>`,
+    `<div class="help">من النظام السابق اختر الإعدادات والبيانات ← تصدير قاعدة البيانات. هنا تُنقل الأسماء والهواتف والمناطق وحدود الائتمان، واختيارياً صافي الأرصدة حتى تاريخ الانتقال كقيود افتتاحية. لا تُنقل الفواتير القديمة؛ لا تبدأ معاملات حقيقية حتى مراجعة الأرصدة. التكرار والتعارض يُفحصان قبل الاعتماد.</div><form id="legacy-form" class="panel padded"><div class="fields"><div><label>النسخة الاحتياطية JSON</label><input name="file" type="file" accept=".json,application/json" required></div>${field("رمز المصدر الثابت", "source", "text", "wifi-home-legacy", "required")}${field("تاريخ رصيد الانتقال شامل اليوم", "date", "date", today(), "required")}<div><label><input name="include_balances" type="checkbox"> نقل الأرصدة من قيود العملاء (بعد المراجعة)</label></div><div><label><input name="exclude_demo" type="checkbox" checked> استبعاد المستندات المعلّمة كتجربة من الأرصدة</label></div></div><button>قراءة الملف ومعاينة النقل</button></form><div id="legacy-plan"></div>`,
   );
   legacyPlan = null;
   legacyInput = null;
 }
 function showLegacyPlan(p) {
   $("#legacy-plan").innerHTML =
-    `<div class="panel padded"><h2>مراجعة قبل الاعتماد</h2><p>عملاء جدد: ${p.new} · سبق نقلهم: ${p.skipped} · تعارضات: ${p.conflicts}</p><p>أرصدة مدينة جديدة: ${money(p.debit)} · أرصدة دائنة جديدة: ${money(p.credit)} ر.ي</p>${table(
+    `<div class="panel padded"><h2>مراجعة قبل الاعتماد</h2><p>عملاء جدد: ${p.new} · سبق نقلهم: ${p.skipped} · تعارضات: ${p.conflicts}</p><p>مستندات معلّمة كتجربة: ${p.demo_documents || 0} · مستبعد منها: ${p.excluded_demo_documents || 0}</p><p>أرصدة مدينة جديدة: ${money(p.debit)} · أرصدة دائنة جديدة: ${money(p.credit)} ر.ي</p>${table(
       ["الاسم", "الهاتف", "المنطقة", "الرصيد المنقول", "الإجراء"],
       p.rows.map(
         (r) =>
@@ -426,6 +426,7 @@ document.addEventListener("submit", (e) => {
           source: d.source,
           date: d.date,
           include_balances: f.querySelector("[name=include_balances]").checked,
+          exclude_demo: f.querySelector("[name=exclude_demo]").checked,
           backup: JSON.parse(await file.text()),
         };
         legacyPlan = await api("/api/legacy/preview", "POST", legacyInput);

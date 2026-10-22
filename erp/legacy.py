@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-from decimal import Decimal, InvalidOperation
 from .domain import BusinessError, audit, journal, money, date
 from .operations import open_date
 
@@ -15,6 +14,8 @@ def migrate(c):
     for col, kind in [
         ("region", "TEXT NOT NULL DEFAULT ''"),
         ("credit_limit", "INTEGER NOT NULL DEFAULT 0"),
+        ("note", "TEXT NOT NULL DEFAULT ''"),
+        ("legacy_created", "TEXT NOT NULL DEFAULT ''"),
     ]:
         if col not in cols:
             c.execute(f"ALTER TABLE customers ADD COLUMN {col} {kind}")
@@ -48,6 +49,17 @@ def preview(c, data):
     balances = data.get("include_balances", False)
     if not isinstance(balances, bool):
         raise BusinessError("خيار نقل الأرصدة غير صالح")
+    exclude_demo = data.get("exclude_demo", False)
+    if not isinstance(exclude_demo, bool):
+        raise BusinessError("خيار استبعاد التجربة غير صالح")
+    demo_refs = {
+        str(item["ref"])
+        for collection in ("sales", "receipts", "expenses", "stockMoves")
+        for item in (
+            db.get(collection, []) if isinstance(db.get(collection, []), list) else []
+        )
+        if isinstance(item, dict) and item.get("demo") is True and item.get("ref")
+    }
     people = db["customers"]
     if not people or len(people) > 5000:
         raise BusinessError("عدد العملاء يجب أن يكون من 1 إلى 5000")
@@ -72,6 +84,10 @@ def preview(c, data):
             if not isinstance(entry, dict):
                 raise BusinessError("قيد قديم غير صالح")
             if entry.get("account") != "العملاء":
+                continue
+            if exclude_demo and (
+                entry.get("demo") is True or str(entry.get("ref", "")) in demo_refs
+            ):
                 continue
             cid = text(entry.get("customerId", ""), 100)
             if cid not in ids:
@@ -100,6 +116,14 @@ def preview(c, data):
             "credit_limit": money(person.get("limit", 0)),
             "opening": totals.get(ident, 0),
         }
+        # Keep old fingerprints unchanged when optional metadata is absent.
+        for key, old_key, limit in (
+            ("note", "note", 2000),
+            ("legacy_created", "created", 100),
+        ):
+            value = text(person.get(old_key, ""), limit)
+            if value:
+                row[key] = value
         fingerprint = digest(row)
         linked = c.execute(
             "SELECT * FROM legacy_customers WHERE source=? AND legacy_id=?",
@@ -116,7 +140,13 @@ def preview(c, data):
             action = "conflict" if same or key in seen else "create"
             seen.add(key)
         rows.append({**row, "action": action, "fingerprint": fingerprint})
-    plan = {"source": source, "date": day, "include_balances": balances, "rows": rows}
+    plan = {
+        "source": source,
+        "date": day,
+        "include_balances": balances,
+        "exclude_demo": exclude_demo,
+        "rows": rows,
+    }
     return {
         **plan,
         "token": digest(plan),
@@ -124,6 +154,8 @@ def preview(c, data):
         "new": sum(r["action"] == "create" for r in rows),
         "skipped": sum(r["action"] == "skip" for r in rows),
         "conflicts": sum(r["action"] == "conflict" for r in rows),
+        "demo_documents": len(demo_refs),
+        "excluded_demo_documents": len(demo_refs) if exclude_demo else 0,
         "debit": sum(max(r["opening"], 0) for r in rows if r["action"] == "create"),
         "credit": sum(max(-r["opening"], 0) for r in rows if r["action"] == "create"),
     }
@@ -143,13 +175,15 @@ def commit(c, data, uid):
         if row["action"] == "skip":
             continue
         cid = c.execute(
-            "INSERT INTO customers(name,phone,address,region,credit_limit) VALUES(?,?,?,?,?)",
+            "INSERT INTO customers(name,phone,address,region,credit_limit,note,legacy_created) VALUES(?,?,?,?,?,?,?)",
             (
                 row["name"],
                 row["phone"],
                 row["address"],
                 row["region"],
                 row["credit_limit"],
+                row.get("note", ""),
+                row.get("legacy_created", ""),
             ),
         ).lastrowid
         c.execute(
@@ -183,6 +217,7 @@ def commit(c, data, uid):
                 "skipped": plan["skipped"],
                 "balances": plan["include_balances"],
                 "date": plan["date"],
+                "exclude_demo": plan["exclude_demo"],
             }
         ),
     )
