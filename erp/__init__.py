@@ -1,0 +1,1 @@
+"""WIFI HOME ERP application."""
