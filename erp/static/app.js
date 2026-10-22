@@ -75,6 +75,10 @@ function layout(page, title, actions, body) {
     sales: "المبيعات",
     customers: "العملاء",
     products: "الأصناف",
+    purchases: "المشتريات",
+    suppliers: "الموردون",
+    returns: "المرتجعات",
+    finance: "المحاسبة",
     reports: "التقارير",
     audit: "سجل التدقيق",
     users: "المستخدمون",
@@ -83,7 +87,12 @@ function layout(page, title, actions, body) {
     `<div class="top"><a class="brand" href="#sales">WIFI HOME <small>ERP</small></a><nav>${Object.entries(
       modules,
     )
-      .filter(([key]) => key !== "users" || session.role === "admin")
+      .filter(
+        ([key]) =>
+          (key !== "users" || session.role === "admin") &&
+          (!["purchases", "suppliers", "returns", "finance"].includes(key) ||
+            session.role !== "sales"),
+      )
       .map(
         ([key, label]) =>
           `<a href="#${key}" class="${key === page ? "active" : ""}">${label}</a>`,
@@ -100,12 +109,12 @@ function invoices(rows) {
       "تاريخ الفاتورة",
       "العميل",
       "صافي القيمة",
-      "مسدد عند الإصدار",
+      "دفع / مردود عند الإصدار",
       "الحالة",
     ],
     rows.map(
       (s) =>
-        `<tr><td><button class="link" data-open="${s.id}">${esc(s.number)}</button>${s.amends ? "<small> · إصدار تعديل</small>" : ""}</td><td>${esc(s.date)}</td><td>${esc(s.customer)}</td><td class="num">${money(s.total)}</td><td class="num">${money(s.paid)}</td><td>${pill(s.status)}</td></tr>`,
+        `<tr><td><button class="link" ${s.kind === "credit" ? `data-credit="${s.credit_id}"` : `data-open="${s.id}"`}>${esc(s.number)}</button>${s.amends ? "<small> · إصدار تعديل</small>" : ""}</td><td>${esc(s.date)}</td><td>${esc(s.customer)}</td><td class="num">${money(s.total)}</td><td class="num">${money(s.paid)}</td><td>${pill(s.status)}</td></tr>`,
     ),
   );
 }
@@ -174,7 +183,7 @@ function products() {
     session.role === "admin"
       ? '<button data-action="product">صنف / رصيد افتتاحي</button>'
       : "",
-    `<div class="help">الرصيد الافتتاحي يُثبت محاسبياً. دورة المشتريات والتوريد ستضاف كوحدة مستقلة؛ لا تُعدّل الكميات يدوياً بعد بدء العمل.</div><div class="panel">${table(
+    `<div class="help">الرصيد الافتتاحي يُثبت محاسبياً. استخدم فاتورة الشراء لترحيل الاستلام وتحديث متوسط التكلفة. القيمة المخزنية محفوظة بدقة ولا تعتمد على تقريب تكلفة الوحدة.</div><div class="panel">${table(
       ["الصنف", "النوع", "المتوفر", "تكلفة الوحدة", "سعر البيع"],
       cache.products.map(
         (p) =>
@@ -204,7 +213,7 @@ async function reports() {
       )
       .join(
         "",
-      )}</div><div class="panel"><div class="panel-head"><h2>المستندات المكوّنة للأرقام</h2><span class="muted">الفواتير المرحلة فقط</span></div>${invoices(r.rows)}</div><div class="help">التقرير المطبوع مستند مستقل بترويسة وفترة وجدول ومجاميع، ولا يحتوي فلاتر أو أزرار التطبيق. لا نخلط التحصيل بمبيعات الفترة لحساب نسبة سداد مضللة.</div>`,
+      )}</div><div class="panel"><div class="panel-head"><h2>المستندات المكوّنة للأرقام</h2><span class="muted">الفواتير والإشعارات الدائنة المرحلة</span></div>${invoices(r.rows)}</div><div class="help">التقرير المطبوع مستند مستقل بترويسة وفترة وجدول ومجاميع، ولا يحتوي فلاتر أو أزرار التطبيق. لا نخلط التحصيل بمبيعات الفترة لحساب نسبة سداد مضللة.</div>`,
   );
 }
 function auditPage() {
