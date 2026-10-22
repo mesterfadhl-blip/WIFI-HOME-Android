@@ -563,3 +563,29 @@ class EnterpriseTests(unittest.TestCase):
         self.assertEqual(customer["legacy_created"], "2025-10-01T09:00:00")
         self.assertEqual(customer["balance"], -5000)
         self.balanced()
+
+    def test_reserved_demo_customers_excluded_but_ordinary_names_retained(self):
+        data = self.legacy()
+        db = data["backup"]["data"]
+        db["customers"] += [
+            {"id": "V47-C1", "name": "شركة الأمل - تجربة"},
+            {"id": "ordinary", "name": "عميل تجربة عادي"},
+        ]
+        db["sales"] = [{"ref": "trial-sale", "demo": True}]
+        db["journal"].append(
+            {
+                "account": "العملاء",
+                "customerId": "V47-C1",
+                "ref": "trial-sale",
+                "date": "2026-10-22",
+                "debit": 100,
+                "credit": 0,
+            }
+        )
+        data["exclude_demo"] = True
+        plan = self.ok("/api/legacy/preview", "POST", data)
+        self.assertEqual(plan["count"], 3)
+        self.assertEqual(plan["excluded_demo_customers"], 1)
+        self.assertIn("ordinary", [r["legacy_id"] for r in plan["rows"]])
+        db["journal"][-1]["ref"] = "non-demo-sale"
+        self.assertEqual(self.client.call("/api/legacy/preview", "POST", data)[0], 400)

@@ -129,7 +129,7 @@ function migrationPage() {
 }
 function showLegacyPlan(p) {
   $("#legacy-plan").innerHTML =
-    `<div class="panel padded"><h2>مراجعة قبل الاعتماد</h2><p>عملاء جدد: ${p.new} · سبق نقلهم: ${p.skipped} · تعارضات: ${p.conflicts}</p><p>مستندات معلّمة كتجربة: ${p.demo_documents || 0} · مستبعد منها: ${p.excluded_demo_documents || 0}</p><p>أرصدة مدينة جديدة: ${money(p.debit)} · أرصدة دائنة جديدة: ${money(p.credit)} ر.ي</p>${table(
+    `<div class="panel padded"><h2>مراجعة قبل الاعتماد</h2><p>عملاء جدد: ${p.new} · سبق نقلهم: ${p.skipped} · تعارضات: ${p.conflicts}</p><p>عملاء التجربة المستبعدون: ${p.excluded_demo_customers || 0} · مستندات معلّمة كتجربة: ${p.demo_documents || 0} · مستبعد منها: ${p.excluded_demo_documents || 0}</p><p>أرصدة مدينة جديدة: ${money(p.debit)} · أرصدة دائنة جديدة: ${money(p.credit)} ر.ي</p>${table(
       ["الاسم", "الهاتف", "المنطقة", "الرصيد المنقول", "الإجراء"],
       p.rows.map(
         (r) =>

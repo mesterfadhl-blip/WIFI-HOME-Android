@@ -60,9 +60,36 @@ def preview(c, data):
         )
         if isinstance(item, dict) and item.get("demo") is True and item.get("ref")
     }
+    # These exact reserved identities were inserted by autoDemo() in the
+    # previous app. Never classify ordinary customers by their names alone.
+    known_demo = {"V47-C1": "شركة الأمل - تجربة", "V47-C2": "مؤسسة النجاح - تجربة"}
+    excluded_customers = []
+    if exclude_demo:
+        for person in db["customers"]:
+            if isinstance(person, dict) and known_demo.get(
+                str(person.get("id", ""))
+            ) == person.get("name"):
+                entries = db.get("journal", [])
+                if isinstance(entries, list) and any(
+                    isinstance(e, dict)
+                    and e.get("account") == "العملاء"
+                    and e.get("customerId") == person["id"]
+                    and str(e.get("ref", "")) not in demo_refs
+                    and e.get("demo") is not True
+                    for e in entries
+                ):
+                    raise BusinessError(
+                        "عميل التجربة مرتبط بحركة غير تجريبية؛ راجع الملف قبل استبعاده"
+                    )
+                excluded_customers.append(person["id"])
     people = db["customers"]
     if not people or len(people) > 5000:
         raise BusinessError("عدد العملاء يجب أن يكون من 1 إلى 5000")
+    people = [
+        p
+        for p in people
+        if not isinstance(p, dict) or p.get("id") not in excluded_customers
+    ]
     entries = db.get("journal", [])
     if balances and not isinstance(entries, list):
         raise BusinessError("دفتر القيود غير صالح")
@@ -156,6 +183,7 @@ def preview(c, data):
         "conflicts": sum(r["action"] == "conflict" for r in rows),
         "demo_documents": len(demo_refs),
         "excluded_demo_documents": len(demo_refs) if exclude_demo else 0,
+        "excluded_demo_customers": len(excluded_customers),
         "debit": sum(max(r["opening"], 0) for r in rows if r["action"] == "create"),
         "credit": sum(max(-r["opening"], 0) for r in rows if r["action"] == "create"),
     }
