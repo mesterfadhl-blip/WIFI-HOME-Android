@@ -33,7 +33,11 @@ def invoice_document(s):
         f'<tr><td>{i}</td><td>{text(l["name"])}</td><td class="num">{l["qty"]}</td><td class="num">{money(l["price"])}</td><td class="num">{money(l["price"]*l["qty"])}</td></tr>'
         for i, l in enumerate(s["lines"], 1)
     )
-    body = f"""<div class="meta"><div><span class="muted">فاتورة إلى</span><br><b>{text(s['customer'])}</b><br>{text(s['address'])}<br>{text(s['phone'])}</div><div>تاريخ الفاتورة: <b>{text(s['date'])}</b><br>الحالة: <span class="status">{statuses[s['status']]}</span><br>السداد: {'نقدي' if s['paid']==s['total'] else 'آجل' if not s['paid'] else 'جزئي'}{('<br>بديل الفاتورة ذات المعرف: '+str(s['amends'])) if s['amends'] else ''}</div></div><table><colgroup><col style="width:6%"><col style="width:40%"><col style="width:12%"><col style="width:21%"><col style="width:21%"></colgroup><thead><tr><th>#</th><th>البيان</th><th class="num">الكمية</th><th class="num">سعر الوحدة</th><th class="num">قيمة البند</th></tr></thead><tbody>{rows}</tbody></table><table class="summary"><tbody><tr><td>مجموع البنود</td><td class="num">{money(s['total']+s['discount'])}</td></tr><tr><td>الخصم</td><td class="num">{money(s['discount'])}</td></tr><tr class="grand"><td>صافي الفاتورة</td><td class="num">{money(s['total'])}</td></tr><tr><td>المسدد عند الإصدار</td><td class="num">{money(s['paid'])}</td></tr><tr><td>آجل عند الإصدار</td><td class="num">{money(s['total']-s['paid'])}</td></tr></tbody></table><div class="note">{text(s['note'])}<br>القيم أعلاه تخص هذه الفاتورة وقت إصدارها. رصيد حساب العميل وسندات القبض اللاحقة يظهران في كشف الحساب المستقل.</div><div class="signatures"><div>إعداد / اعتماد</div><div>توقيع المستلم</div></div>"""
+    body = f"""<div class="meta"><div><span class="muted">فاتورة إلى</span><br><b>{text(s['customer'])}</b><br>{text(s['address'])}<br>{text(s['phone'])}</div><div>تاريخ الفاتورة: <b>{text(s['date'])}</b><br>تاريخ الاستحقاق: <b>{text(s.get('due_date') or s['date'])}</b><br>الحالة: <span class="status">{statuses[s['status']]}</span><br>السداد: {'نقدي' if s['paid']==s['total'] else 'آجل' if not s['paid'] else 'جزئي'}{('<br>بديل الفاتورة ذات المعرف: '+str(s['amends'])) if s['amends'] else ''}</div></div><table><colgroup><col style="width:6%"><col style="width:40%"><col style="width:12%"><col style="width:21%"><col style="width:21%"></colgroup><thead><tr><th>#</th><th>البيان</th><th class="num">الكمية</th><th class="num">سعر الوحدة</th><th class="num">قيمة البند</th></tr></thead><tbody>{rows}</tbody></table><table class="summary"><tbody><tr><td>مجموع البنود</td><td class="num">{money(s['total']+s['discount'])}</td></tr><tr><td>الخصم</td><td class="num">{money(s['discount'])}</td></tr><tr class="grand"><td>صافي الفاتورة</td><td class="num">{money(s['total'])}</td></tr><tr><td>المسدد عند الإصدار</td><td class="num">{money(s['paid'])}</td></tr><tr><td>آجل عند الإصدار</td><td class="num">{money(s['total']-s['paid'])}</td></tr></tbody></table><div class="note">{text(s['note'])}<br>القيم أعلاه تخص هذه الفاتورة وقت إصدارها. رصيد حساب العميل وسندات القبض اللاحقة يظهران في كشف الحساب المستقل.</div><div class="signatures"><div>إعداد / اعتماد</div><div>توقيع المستلم</div></div>"""
+    if s["status"] == "posted" and s.get("settlement"):
+        payment = s["settlement"]
+        block = f'<div class="note"><b>حالة التحصيل عند استخراج المستند</b><br>قبض مخصص لهذه الفاتورة: {money(payment["allocated"])} ر.ي · إشعارات دائنة: {money(payment["credits"])} ر.ي · مردود نقدي: {money(payment["refunds"])} ر.ي<br><b>المتبقي الفعلي للفـاتورة: {money(payment["outstanding"])} ر.ي</b></div>'
+        body = body.replace('<div class="note">', block + '<div class="note">', 1)
     return document("فاتورة مبيعات", s["number"], body)
 
 
@@ -102,3 +106,40 @@ def finance_document(s):
     ]
     body = f"""<div class="meta"><div>الفترة: <b>{text(s['from'])} — {text(s['to'])}</b></div><div>أساس التقرير: القيود المرحلة<br>دون ضريبة</div></div><table><colgroup><col style="width:70%"><col style="width:30%"></colgroup><thead><tr><th>البيان</th><th class="num">ريال يمني</th></tr></thead><tbody>{''.join(f'<tr class="{ "grand" if i==6 else ""}"><td>{text(label)}</td><td class="num">{money(value)}</td></tr>' for i,(label,value) in enumerate(lines))}</tbody></table><h2 style="margin-top:30px">ميزان المراجعة التراكمي حتى {text(s['to'])}</h2><table><colgroup><col style="width:50%"><col style="width:25%"><col style="width:25%"></colgroup><thead><tr><th>الحساب</th><th class="num">حركة مدين</th><th class="num">حركة دائن</th></tr></thead><tbody>{''.join(f'<tr><td>{text(r["account"])}</td><td class="num">{money(r["debit"])}</td><td class="num">{money(r["credit"])}</td></tr>' for r in s['trial'])}</tbody><tfoot><tr><td>الإجمالي</td><td class="num">{money(s['debits'])}</td><td class="num">{money(s['credits'])}</td></tr></tfoot></table><div class="note">قائمة الربح والخسارة تخص الفترة المحددة. ميزان المراجعة تراكمي حتى نهاية الفترة. تقييم المخزون الحالي يُعرض في شاشة المخزون ولا يُنسب تلقائياً إلى تاريخ قديم.</div>"""
     return document("قائمة الربح والخسارة وميزان المراجعة", "FINANCIAL", body)
+
+
+def aging_document(s):
+    labels = {
+        "not_due": "غير متأخر",
+        "days_1_30": "1–30 يوماً",
+        "days_31_60": "31–60 يوماً",
+        "days_61_90": "61–90 يوماً",
+        "over_90": "أكثر من 90 يوماً",
+    }
+    rows = "".join(
+        f'<tr><td>{text(r["number"])}</td><td>{text(r["customer"])}</td><td>{text(r["due_date"])}</td><td class="num">{r["days_overdue"]}</td><td class="num">{money(r["outstanding"])}</td></tr>'
+        for r in s["rows"]
+    )
+    body = f"""<div class="meta"><div>الرصيد حتى: <b>{text(s['asof'])}</b></div><div>الأساس: فواتير مرحلة بعد تخصيص القبض والمرتجعات</div></div><table><colgroup><col style="width:20%"><col style="width:30%"><col style="width:20%"><col style="width:10%"><col style="width:20%"></colgroup><thead><tr><th>الفاتورة</th><th>العميل</th><th>تاريخ الاستحقاق</th><th class="num">تأخير / يوم</th><th class="num">المتبقي الفعلي</th></tr></thead><tbody>{rows or '<tr><td colspan="5">لا توجد فواتير مستحقة</td></tr>'}</tbody></table><h2 style="margin-top:25px">تحليل أعمار المستحقات</h2><table><thead><tr><th>الشريحة</th><th class="num">الرصيد</th></tr></thead><tbody>{''.join(f'<tr><td>{label}</td><td class="num">{money(s["buckets"][key])}</td></tr>' for key,label in labels.items())}</tbody></table><table class="summary"><tr><td>إجمالي الفواتير المفتوحة</td><td class="num">{money(s['gross_outstanding'])}</td></tr><tr><td>قبض غير مخصص</td><td class="num">{money(s['unapplied_receipts'])}</td></tr><tr><td>أرصدة دائنة من المرتجعات</td><td class="num">{money(s['customer_credits'])}</td></tr><tr class="grand"><td>صافي حسابات العملاء</td><td class="num">{money(s['net_receivable'])}</td></tr></table><div class="note">لا يوزع النظام الأرصدة غير المخصصة على الفواتير تلقائياً. التخصيص يحدد علاقة السداد بالمستند ولا يكرر قيد القبض. لا تُحتسب أعمار الدين من تاريخ استخراج التقرير وإنما من تاريخ استحقاق كل فاتورة.</div>"""
+    return document("أعمار الذمم المدينة", "AR-AGING", body)
+
+
+def transfer_document(s):
+    total = sum(l["cost"] for l in s["lines"])
+    body = f"""<div class="meta"><div>من: <b>{text(s['source'])}</b><br>إلى: <b>{text(s['target'])}</b></div><div>التاريخ: {text(s['date'])}<br>الحالة: {text({'draft':'مسودة','posted':'مرحل','cancelled':'ملغى'}[s['status']])}</div></div><table><colgroup><col style="width:55%"><col style="width:15%"><col style="width:30%"></colgroup><thead><tr><th>الصنف</th><th class="num">الكمية</th><th class="num">القيمة المنقولة</th></tr></thead><tbody>{''.join(f'<tr><td>{text(l["name"])}</td><td class="num">{l["qty"]}</td><td class="num">{money(l["cost"])}</td></tr>' for l in s['lines'])}</tbody><tfoot><tr><td colspan="2">إجمالي القيمة</td><td class="num">{money(total)}</td></tr></tfoot></table><div class="note">{text(s['note'])}<br>تحويل داخلي بين مستودعات المنشأة دون تغيير الملكية. لا يغيّر إجمالي قيمة المخزون ولا يولّد إيراداً أو مصروفاً.</div><div class="signatures"><div>أمين المستودع المرسل</div><div>أمين المستودع المستلم</div></div>"""
+    return document("سند تحويل مخزني", s["number"], body)
+
+
+def reconciliation_document(s):
+    rows = "".join(
+        f'<tr><td>{text(l["date"])}</td><td>{text(l["reference"])}</td><td class="num">{money(l["amount"])}</td><td>{text(l["document"] or "غير مطابق")}</td></tr>'
+        for l in s["lines"]
+    )
+    final = s["status"] == "final"
+    summary = (
+        f'<tr><td>حركات دفترية معلقة</td><td class="num">{money(s["unmatched_book"])}</td></tr><tr class="grand"><td>رصيد الدفاتر عند الاعتماد</td><td class="num">{money(s["book_closing"])}</td></tr>'
+        if final
+        else ""
+    )
+    body = f"""<div class="meta"><div>الحساب: <b>{text(s['bank'])}</b><br>الكود: {text(s['code'])}</div><div>الفترة: {text(s['from_date'])} — {text(s['to_date'])}<br>الحالة: {'تسوية معتمدة' if final else 'مسودة مطابقة — غير معتمدة'}</div></div><table><colgroup><col style="width:20%"><col style="width:25%"><col style="width:22%"><col style="width:33%"></colgroup><thead><tr><th>تاريخ البنك</th><th>مرجع البنك</th><th class="num">المبلغ الموقّع</th><th>المستند الدفتري المطابق</th></tr></thead><tbody>{rows or '<tr><td colspan="4">لا توجد حركات في الكشف</td></tr>'}</tbody></table><table class="summary"><tr><td>رصيد أول الكشف</td><td class="num">{money(s['opening'])}</td></tr><tr><td>رصيد نهاية الكشف</td><td class="num">{money(s['closing'])}</td></tr>{summary}</table><div class="note">المبالغ الموجبة إيداعات، والسالبة سحوبات. الرصيد الدفتري المعدل = رصيد كشف البنك + الحركات الدفترية التي لم تظهر بعد في البنك. المطابقة لا تُنشئ قيوداً مالية جديدة، ولا تُرحّل رسوم البنك تلقائياً.</div>"""
+    return document("محضر تسوية بنكية", s["reference"], body)

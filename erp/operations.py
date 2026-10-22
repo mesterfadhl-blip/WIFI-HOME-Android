@@ -108,32 +108,16 @@ def chronology(c, pid, day):
         )
 
 
-def change_stock(c, pid, qty, value, ref, day):
-    p = c.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
-    chronology(c, pid, day)
-    q = p["qty"] + qty
-    v = p["stock_value"] + value
-    if q < 0 or v < 0 or (q == 0 and v != 0):
-        raise BusinessError("الحركة تسبب كمية أو قيمة مخزون غير صحيحة: " + p["name"])
-    cost = rounded(Decimal(v) / q) if q else p["cost"]
-    c.execute(
-        "UPDATE products SET qty=?,stock_value=?,cost=? WHERE id=?", (q, v, cost, pid)
-    )
-    c.execute(
-        "INSERT INTO movements(document,date,product_id,qty) VALUES(?,?,?,?)",
-        (ref, day, pid, qty),
-    )
+def change_stock(c, pid, qty, value, ref, day, warehouse_id=1):
+    from .warehouses import change
+
+    return change(c, pid, qty, value, ref, day, warehouse_id)
 
 
-def issue_cost(c, pid, qty):
-    p = c.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
-    if p["qty"] < qty:
-        raise BusinessError("مخزون غير كافٍ: " + p["name"])
-    return (
-        p["stock_value"]
-        if qty == p["qty"]
-        else rounded(Decimal(p["stock_value"]) * qty / p["qty"])
-    )
+def issue_cost(c, pid, qty, warehouse_id=1):
+    from .warehouses import cost
+
+    return cost(c, pid, qty, warehouse_id)
 
 
 def purchase_data(c, id):
@@ -160,6 +144,11 @@ def purchase_save(c, data, uid, id=None):
     ).fetchone():
         raise BusinessError("اختر المورد")
     day = open_date(c, data.get("date"))
+    from .warehouses import validate
+
+    warehouse_id = validate(
+        c, data.get("warehouse_id") or (old["warehouse_id"] if old else 1)
+    )
     paid = money(data.get("paid", 0))
     lines = []
     for l in data.get("lines", []):
@@ -193,6 +182,7 @@ def purchase_save(c, data, uid, id=None):
         "INSERT INTO purchase_lines(purchase_id,product_id,name,qty,cost) VALUES(?,?,?,?,?)",
         [(id, *l) for l in lines],
     )
+    c.execute("UPDATE purchases SET warehouse_id=? WHERE id=?", (warehouse_id, id))
     audit(c, uid, "حفظ مسودة شراء", str(id))
     return purchase_data(c, id)
 
@@ -212,7 +202,13 @@ def post_purchase(c, id, uid):
         raise BusinessError("المستند ليس مسودة")
     for l in s["lines"]:
         change_stock(
-            c, l["product_id"], l["qty"], l["qty"] * l["cost"], s["number"], s["date"]
+            c,
+            l["product_id"],
+            l["qty"],
+            l["qty"] * l["cost"],
+            s["number"],
+            s["date"],
+            s["warehouse_id"],
         )
     rows = [("المخزون", s["total"], 0), ("الموردون", 0, s["total"])]
     if s["paid"]:
@@ -230,8 +226,8 @@ def cancel_purchase(c, id, uid, reason):
         raise BusinessError("اختر فاتورة مرحلة واكتب سبب الإلغاء")
     for l in s["lines"]:
         last = c.execute(
-            "SELECT document FROM movements WHERE product_id=? ORDER BY date DESC,id DESC LIMIT 1",
-            (l["product_id"],),
+            "SELECT document FROM movements WHERE product_id=? AND warehouse_id=? ORDER BY date DESC,id DESC LIMIT 1",
+            (l["product_id"], s["warehouse_id"]),
         ).fetchone()
         if not last or last["document"] != s["number"]:
             raise BusinessError(
@@ -240,7 +236,13 @@ def cancel_purchase(c, id, uid, reason):
     ref = s["number"] + "-REV"
     for l in s["lines"]:
         change_stock(
-            c, l["product_id"], -l["qty"], -l["qty"] * l["cost"], ref, s["date"]
+            c,
+            l["product_id"],
+            -l["qty"],
+            -l["qty"] * l["cost"],
+            ref,
+            s["date"],
+            s["warehouse_id"],
         )
     rows = c.execute(
         "SELECT * FROM journal WHERE document=?", (s["number"],)
@@ -317,6 +319,10 @@ def create_return(c, data, uid):
         "INSERT INTO returns(invoice_id,date,status,total,cost,refund,reason) VALUES(?,?,'posted',?,?,?,?)",
         (s["id"], day, total, cost, refund, reason),
     ).lastrowid
+    from .warehouses import validate
+
+    wid = validate(c, data.get("warehouse_id") or s["warehouse_id"])
+    c.execute("UPDATE returns SET warehouse_id=? WHERE id=?", (wid, id))
     ref = f"CN-{id:06}"
     c.execute("UPDATE returns SET number=? WHERE id=?", (ref, id))
     c.executemany(
@@ -333,7 +339,7 @@ def create_return(c, data, uid):
         if is_service:
             service += v
         else:
-            change_stock(c, pid, q, v, ref, day)
+            change_stock(c, pid, q, v, ref, day, wid)
             physical += v
     if physical:
         entries.append(("المخزون", None, physical, 0))
@@ -347,6 +353,9 @@ def create_return(c, data, uid):
             ("الصندوق", None, 0, refund),
         ]
     journal(c, ref, day, entries)
+    from .settlements import trim_allocations
+
+    trim_allocations(c, s["id"], day, uid, reason="تخفيض المتبقي بسبب " + ref)
     audit(c, uid, "إشعار دائن / مرتجع مبيعات", ref, reason)
     return return_data(c, id)
 
@@ -360,15 +369,23 @@ def cancel_return(c, id, uid, reason):
     for l in s["lines"]:
         if not l["service"]:
             last = c.execute(
-                "SELECT document FROM movements WHERE product_id=? ORDER BY date DESC,id DESC LIMIT 1",
-                (l["product_id"],),
+                "SELECT document FROM movements WHERE product_id=? AND warehouse_id=? ORDER BY date DESC,id DESC LIMIT 1",
+                (l["product_id"], s["warehouse_id"]),
             ).fetchone()
             if not last or last["document"] != s["number"]:
                 raise BusinessError("توجد حركات مخزون لاحقة؛ راجعها قبل عكس المرتجع")
     ref = s["number"] + "-REV"
     for l in s["lines"]:
         if not l["service"]:
-            change_stock(c, l["product_id"], -l["qty"], -l["cost"], ref, s["date"])
+            change_stock(
+                c,
+                l["product_id"],
+                -l["qty"],
+                -l["cost"],
+                ref,
+                s["date"],
+                s["warehouse_id"],
+            )
     rows = c.execute(
         "SELECT * FROM journal WHERE document=?", (s["number"],)
     ).fetchall()

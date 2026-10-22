@@ -378,7 +378,7 @@ class OperationTests(unittest.TestCase):
             self.assertEqual(
                 c.execute("SELECT total FROM invoices").fetchone()[0], 19000
             )
-            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 3)
 
     def test_migration_is_repeatable_and_retains_balances(self):
         self.post_purchase(self.purchase())

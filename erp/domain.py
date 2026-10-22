@@ -62,4 +62,7 @@ def invoice_data(c, id):
         ).fetchone()[0]
         line["returned_qty"] = returned
         line["returnable_qty"] = line["qty"] - returned
+    from .settlements import invoice_balance
+
+    data["settlement"] = invoice_balance(c, id)
     return data

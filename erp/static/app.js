@@ -79,6 +79,9 @@ function layout(page, title, actions, body) {
     suppliers: "الموردون",
     returns: "المرتجعات",
     finance: "المحاسبة",
+    settlements: "التحصيل",
+    banks: "البنوك",
+    warehouses: "المستودعات",
     reports: "التقارير",
     audit: "سجل التدقيق",
     users: "المستخدمون",
@@ -90,7 +93,14 @@ function layout(page, title, actions, body) {
       .filter(
         ([key]) =>
           (key !== "users" || session.role === "admin") &&
-          (!["purchases", "suppliers", "returns", "finance"].includes(key) ||
+          (![
+            "purchases",
+            "suppliers",
+            "returns",
+            "finance",
+            "banks",
+            "warehouses",
+          ].includes(key) ||
             session.role !== "sales"),
       )
       .map(
@@ -463,6 +473,7 @@ document.addEventListener("submit", (e) => {
     if (form.id === "modal-form") {
       try {
         const kind = form.dataset.kind;
+        if (form.dataset.request) data.request_id = form.dataset.request;
         if (kind === "statement") {
           window.open(
             "/print/statement?" +

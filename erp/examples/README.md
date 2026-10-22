@@ -21,3 +21,15 @@ Additional samples use a fresh, dedicated test database, not the original invoic
 - finance-workspace.png: actual browser financial workspace for this cycle.
 
 The remaining inventory is 199 units with an exact value of 9,950.00 YER. Sample data is explicitly synthetic; none of these outputs is a live invoice or assertion that the public Netlify site has been updated.
+
+## Version 3 review cycle
+
+These samples use another fresh synthetic database, not the previous cycles. Opening inventory is 100 units at 40.00 YER in the main warehouse. A transfer sends 20 units (800.00 YER) to a branch warehouse without changing the global stock asset. A sale issues two units from that branch, totals 190.00 after discount and records 50.00 cash at issue. A bank customer receipt of 100.00 is allocated to that invoice, leaving an actual invoice balance of 40.00. The test bank has a 5,000.00 opening balance and its 100.00 receipt is matched to an imported statement ending at 5,100.00.
+
+- settled-invoice.pdf: original issue amounts plus a separate current-settlement section with 100.00 allocated and 40.00 remaining.
+- receivable-aging.pdf: one invoice due for 40.00; unapplied receipts 0.00; net receivable 40.00.
+- warehouse-transfer.pdf: 20 units valued at 800.00 between named warehouses; no change of ownership.
+- bank-reconciliation.pdf: matched deposit, statement closing and book closing 5,100.00; pending amount 0.00.
+- settlements-workspace.png: real browser capture of the allocation/aging workspace.
+
+After the sale, warehouse quantities are 80 and 18 units, total value 3,920.00 YER. These documents demonstrate test output only; the public static website remains unchanged.

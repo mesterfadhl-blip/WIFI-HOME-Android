@@ -64,6 +64,14 @@ def draft_save(c, data, user, id=None):
     from .operations import open_date
 
     day = open_date(c, data.get("date"))
+    from .warehouses import validate
+
+    warehouse_id = validate(
+        c, data.get("warehouse_id") or (old["warehouse_id"] if old else 1)
+    )
+    due = date(data.get("due_date") or (old["due_date"] if old else day))
+    if due < day:
+        raise BusinessError("تاريخ الاستحقاق يسبق تاريخ الفاتورة")
     discount = money(data.get("discount", 0))
     paid = money(data.get("paid", 0))
     lines = []
@@ -121,6 +129,10 @@ def draft_save(c, data, user, id=None):
         "INSERT INTO lines(invoice_id,product_id,name,qty,price,cost,service) VALUES(?,?,?,?,?,?,?)",
         [(id, *line) for line in lines],
     )
+    c.execute(
+        "UPDATE invoices SET warehouse_id=?,due_date=? WHERE id=?",
+        (warehouse_id, due, id),
+    )
     audit(c, user, "حفظ مسودة", str(id))
     return invoice_data(c, id)
 
@@ -129,6 +141,9 @@ def reverse(c, s, user, reason, status):
     from .operations import change_stock, open_date
 
     open_date(c, s["date"])
+    from .settlements import trim_allocations
+
+    trim_allocations(c, s["id"], s["date"], user, all=True, reason=reason)
     if c.execute(
         "SELECT 1 FROM returns WHERE invoice_id=? AND status='posted'", (s["id"],)
     ).fetchone():
@@ -149,7 +164,13 @@ def reverse(c, s, user, reason, status):
     for line in s["lines"]:
         if not line["service"]:
             change_stock(
-                c, line["product_id"], line["qty"], line["cost_total"], ref, s["date"]
+                c,
+                line["product_id"],
+                line["qty"],
+                line["cost_total"],
+                ref,
+                s["date"],
+                s["warehouse_id"],
             )
     c.execute("UPDATE invoices SET status=? WHERE id=?", (status, s["id"]))
     audit(c, user, "عكس فاتورة", s["number"], reason)
@@ -178,13 +199,30 @@ def post_invoice(c, id, user):
         value = (
             line["qty"] * p["cost"]
             if p["service"]
-            else issue_cost(c, p["id"], line["qty"])
+            else issue_cost(c, p["id"], line["qty"], s["warehouse_id"])
         )
         if not p["service"]:
-            change_stock(c, p["id"], -line["qty"], -value, s["number"], s["date"])
+            change_stock(
+                c,
+                p["id"],
+                -line["qty"],
+                -value,
+                s["number"],
+                s["date"],
+                s["warehouse_id"],
+            )
         c.execute(
             "UPDATE lines SET cost=?,cost_total=?,net_total=? WHERE id=?",
-            (p["cost"], value, net, line["id"]),
+            (
+                int(
+                    (Decimal(value) / line["qty"]).quantize(
+                        Decimal("1"), rounding=ROUND_HALF_UP
+                    )
+                ),
+                value,
+                net,
+                line["id"],
+            ),
         )
         cost += value
         if p["service"]:
@@ -221,6 +259,9 @@ class Application:
             from .operations import migrate
 
             migrate(c)
+            from .extensions import migrate as migrate_extensions
+
+            migrate_extensions(c)
 
     def __call__(self, env, start):
         status = 200
@@ -242,6 +283,7 @@ class Application:
                 "/style.css",
                 "/document.js",
                 "/operations.js",
+                "/workspace.js",
             ):
                 file = ROOT / "static" / ({"/": "index.html"}.get(path, path[1:]))
                 body = file.read_bytes()
@@ -425,6 +467,11 @@ class Application:
     def dispatch(self, c, path, method, data, env, uid, role, session):
         from .operations import handle, open_date
 
+        from .extensions import handle as extended_handle
+
+        extra = extended_handle(c, path, method, data, env, uid, role)
+        if extra is not None:
+            return extra
         extra = handle(c, path, method, data, env, uid, role)
         if extra is not None:
             return extra
@@ -455,6 +502,9 @@ class Application:
                 for key, sql in {
                     "customers": "SELECT c.*,coalesce((SELECT sum(debit-credit) FROM journal j WHERE j.account='العملاء' AND j.customer_id=c.id),0) balance FROM customers c",
                     "products": "SELECT * FROM products",
+                    "warehouses": "SELECT * FROM warehouses ORDER BY id",
+                    "transfers": "SELECT t.*,a.name source,b.name target FROM transfers t JOIN warehouses a ON a.id=t.source_id JOIN warehouses b ON b.id=t.target_id ORDER BY t.id DESC",
+                    "banks": "SELECT * FROM banks ORDER BY id",
                     "suppliers": "SELECT s.*,coalesce((SELECT sum(credit-debit) FROM journal j WHERE j.account='الموردون' AND j.supplier_id=s.id),0) balance FROM suppliers s",
                     "purchases": "SELECT p.*,s.name supplier FROM purchases p JOIN suppliers s ON s.id=p.supplier_id ORDER BY p.id DESC",
                     "returns": "SELECT r.*,i.number invoice,c.name customer FROM returns r JOIN invoices i ON i.id=r.invoice_id JOIN customers c ON c.id=i.customer_id ORDER BY r.id DESC",
@@ -518,6 +568,18 @@ class Application:
                     "INSERT INTO movements(document,date,product_id,qty) VALUES(?,?,?,?)",
                     (ref, day, id, q),
                 )
+            if not service:
+                from .warehouses import validate
+
+                wid = validate(c, data.get("warehouse_id") or 1)
+                c.execute(
+                    "INSERT INTO warehouse_stock(warehouse_id,product_id,qty,value) VALUES(?,?,?,?)",
+                    (wid, id, q, q * cost),
+                )
+                c.execute(
+                    "UPDATE movements SET warehouse_id=? WHERE document=?",
+                    (wid, f"OPEN-STOCK-{id}"),
+                )
             audit(c, uid, "رصيد صنف افتتاحي", str(id))
             return {"id": id}
         if path == "/api/invoices" and method == "POST":
@@ -559,6 +621,8 @@ class Application:
                         return invoice_data(c, id)
                     draft = {
                         "customer_id": s["customer_id"],
+                        "warehouse_id": s["warehouse_id"],
+                        "due_date": s["due_date"],
                         "date": s["date"],
                         "discount": str(Decimal(s["discount"]) / 100),
                         "paid": str(Decimal(s["paid"]) / 100),

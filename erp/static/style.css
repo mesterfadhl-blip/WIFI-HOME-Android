@@ -521,3 +521,28 @@ dialog::backdrop {
     margin-top: 15px;
   }
 }
+/* Keep module navigation usable as ERP modules grow. */
+.top {
+  gap: 12px;
+}
+.top .brand,
+.top .user {
+  flex-shrink: 0;
+}
+.top .user {
+  white-space: nowrap;
+}
+.top nav {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.top nav a {
+  white-space: nowrap;
+}
+@media (max-width: 650px) {
+  .top nav {
+    flex-basis: 100%;
+  }
+}
