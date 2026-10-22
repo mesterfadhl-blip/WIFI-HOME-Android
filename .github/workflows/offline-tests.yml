@@ -1,0 +1,18 @@
+name: Offline phone checks
+on:
+  push:
+    paths: ['offline/**', 'web/**', 'scripts/build_offline.py', 'tests/erp.test.mjs', 'tests/offline.test.mjs', '.github/workflows/offline-tests.yml']
+  pull_request:
+    paths: ['offline/**', 'web/**', 'scripts/build_offline.py', 'tests/erp.test.mjs', 'tests/offline.test.mjs', '.github/workflows/offline-tests.yml']
+permissions:
+  contents: read
+jobs:
+  local-operations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/erp.test.mjs tests/offline.test.mjs
+      - run: python scripts/build_offline.py /tmp/WIFI-HOME-OFFLINE.html

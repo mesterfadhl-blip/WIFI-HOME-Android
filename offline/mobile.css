@@ -1,0 +1,84 @@
+.offline-status {
+  padding: 12px 16px;
+  border: 1px solid #d8e4e0;
+  border-radius: 12px;
+  margin: 0 0 16px;
+  background: #edf9f2;
+  color: #185438;
+  line-height: 1.8;
+}
+.offline-status.warn {
+  background: #fff0cf;
+  color: #624500;
+  border-color: #e6cc8e;
+}
+.offline-status b {
+  display: block;
+}
+.offline-doc {
+  position: fixed;
+  inset: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - 20px);
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+}
+.offline-doc iframe {
+  border: 0;
+  width: 100%;
+  height: calc(100% - 70px);
+  background: white;
+}
+.offline-doc .actions {
+  padding: 10px;
+  background: #f1f5f7;
+  margin: 0;
+}
+.offline-help {
+  line-height: 1.9;
+}
+.head-actions {
+  flex-wrap: wrap;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+@media (max-width: 650px) {
+  header {
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .head-actions button {
+    padding: 9px;
+    font-size: 12px;
+  }
+  aside {
+    position: static !important;
+    inset: auto !important;
+  }
+  nav {
+    overflow: auto;
+  }
+  nav a {
+    white-space: nowrap;
+  }
+  .invoice-meta {
+    grid-template-columns: 1fr;
+  }
+  .invoice {
+    padding: 16px;
+  }
+  .form-grid input,
+  .form-grid select {
+    max-width: 100%;
+  }
+}
+@media print {
+  .offline-status {
+    display: none !important;
+  }
+}
