@@ -9,6 +9,36 @@ from erp.server import connect, password_hash
 
 
 class ProductionTests(unittest.TestCase):
+    def test_railway_requires_database_inside_attached_volume(self):
+        with tempfile.TemporaryDirectory() as folder:
+            settings = {
+                "ERP_DATABASE": str(Path(folder) / "volume" / "data.sqlite3"),
+                "ERP_COOKIE_SECURE": "1",
+                "ERP_ADMIN_NAME": "owner",
+                "ERP_ADMIN_PASSWORD": "Synthetic-Test-Password-123",
+                "RAILWAY_ENVIRONMENT_ID": "test-environment",
+                "RAILWAY_VOLUME_MOUNT_PATH": "",
+            }
+            with patch.dict(os.environ, settings):
+                with self.assertRaises(RuntimeError):
+                    production_app()
+                self.assertFalse(Path(settings["ERP_DATABASE"]).exists())
+                with patch.dict(
+                    os.environ,
+                    {"RAILWAY_VOLUME_MOUNT_PATH": str(Path(folder) / "volume-other")},
+                ):
+                    with self.assertRaises(RuntimeError):
+                        production_app()
+                with patch.dict(
+                    os.environ,
+                    {"RAILWAY_VOLUME_MOUNT_PATH": str(Path(folder) / "volume")},
+                ):
+                    production_app()
+                    with connect(settings["ERP_DATABASE"]) as c:
+                        self.assertEqual(
+                            c.execute("SELECT count(*) FROM users").fetchone()[0], 1
+                        )
+
     def test_bootstrap_is_private_and_preserved_across_restart(self):
         with tempfile.TemporaryDirectory() as folder:
             path = str(Path(folder) / "data.sqlite3")

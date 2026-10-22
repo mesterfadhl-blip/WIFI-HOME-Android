@@ -1,0 +1,13 @@
+.git
+.gradle
+.idea
+app
+web
+tests
+**/__pycache__
+**/*.pyc
+**/*.sqlite3
+**/*.sqlite3-*
+**/*.db
+**/.env*
+erp/examples

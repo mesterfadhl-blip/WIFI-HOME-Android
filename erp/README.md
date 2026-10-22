@@ -1,5 +1,7 @@
 # WIFI HOME ERP — sales, purchasing, stock and accounting
 
+Deployment guides: [Railway (Arabic)](RAILWAY-AR.md) or [Render (Arabic)](DEPLOY-AR.md). Both require a hosting account and persistent storage; adding deployment configuration does not create a public service.
+
 This is a new server-backed application under `erp/`. It does not load the Android HTML or the earlier localStorage workspace, and does not auto-import or overwrite either dataset. It uses one shared SQLite database, integer minor-unit money, server-authorized sessions, transactional posting, immutable posted documents and separate document templates. Currency: YER; no tax.
 
 ## Run locally

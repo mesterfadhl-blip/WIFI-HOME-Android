@@ -14,6 +14,16 @@ def production_app():
         )
     if os.environ.get("ERP_COOKIE_SECURE") != "1":
         raise RuntimeError("Production requires ERP_COOKIE_SECURE=1 and HTTPS")
+    if os.environ.get("RAILWAY_ENVIRONMENT_ID"):
+        mount = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "")
+        if (
+            not mount
+            or not Path(mount).is_absolute()
+            or not Path(database).resolve().is_relative_to(Path(mount).resolve())
+        ):
+            raise RuntimeError(
+                "Attach a persistent Railway volume and place ERP_DATABASE inside it"
+            )
     os.umask(0o077)
     app = create_app(database)
     with connect(database) as connection:
