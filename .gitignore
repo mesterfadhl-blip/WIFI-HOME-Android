@@ -3,3 +3,10 @@
 local.properties
 **/build/
 *.iml
+
+# Python caches and private working databases
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
